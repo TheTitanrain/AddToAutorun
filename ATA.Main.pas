@@ -78,6 +78,7 @@ type
     FAutoruns: TAutoruns;
     FActionInfoBox: TProc;
     FAnimateDir: Boolean;
+    FSilentMode: Boolean;
     function CreateInputFile(FileName: string): TAutorunFileItem;
     procedure Clear;
     function ExistCurrentApp: Integer;
@@ -204,13 +205,13 @@ var
   FileName: string;
   FileList: TStringList;
 begin
-  //Структура дропа файлов
+  //пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
   FmtEtc.cfFormat := CF_HDROP;
   FmtEtc.ptd := nil;
   FmtEtc.dwAspect := DVASPECT_CONTENT;
   FmtEtc.lindex := -1;
   FmtEtc.tymed := TYMED_HGLOBAL;
-  //Если структура нужная нам
+  //пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
   if DataObj.GetData(FmtEtc, Medium) = S_OK then
   begin
     FileList := TStringList.Create;
@@ -220,7 +221,7 @@ begin
         FileNameLength := DragQueryFile(Medium.hGlobal, i, nil, 0);
         SetLength(FileName, FileNameLength);
         DragQueryFile(Medium.hGlobal, i, PChar(FileName), FileNameLength + 1);
-        //Только исполнительные файлы
+        //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 
         if TArrayHelp.InArray<string>(BinExtArray, AnsiLowerCase(ExtractFileExt(FileName))) then
           FileList.Add(FileName)
@@ -252,28 +253,35 @@ var
   FileName: string;
 begin
   FAutoruns := TAutoruns.Create(TableExAutoruns);
-  RegisterDragDrop(Handle, Self);
-  PanelSplash(PanelStart);
   if ParamCount > 0 then
   begin
     FileName := ParamStr(1);
     if FileExists(FileName) then
     begin
-      if TArrayHelp.InArray<string>(BinExtArray, AnsiLowerCase(ExtractFileExt(FileName))) then
-        ProcessFile(FileName)
-      else if AnsiLowerCase(ExtractFileExt(FileName)) = '.lnk' then
-      begin
+      if AnsiLowerCase(ExtractFileExt(FileName)) = '.lnk' then
         FileName := GetFileNameFromLink(FileName);
-        if TArrayHelp.InArray<string>(BinExtArray, AnsiLowerCase(ExtractFileExt(FileName))) then
-          ProcessFile(FileName);
+      if TArrayHelp.InArray<string>(BinExtArray, AnsiLowerCase(ExtractFileExt(FileName))) then
+      begin
+        FSilentMode := True;
+        Application.ShowMainForm := False;
+        FFile := CreateInputFile(FileName);
+        if FindCmdLineSwitch('machine', ['-', '/'], True) or
+           FindCmdLineSwitch('m', ['-', '/'], True) then
+          CheckBoxLocalMachine.Checked := True;
+        AddCurrentToAutoRun;
+        Application.Terminate;
+        Exit;
       end;
     end;
   end;
+  RegisterDragDrop(Handle, Self);
+  PanelSplash(PanelStart);
 end;
 
 procedure TFormMain.FormDestroy(Sender: TObject);
 begin
-  RevokeDragDrop(Handle);
+  if not FSilentMode then
+    RevokeDragDrop(Handle);
   FAutoruns.Free;
 end;
 
@@ -346,18 +354,20 @@ begin
         Reg.RootKey := HKEY_CURRENT_USER;
       Reg.OpenKey('Software\Microsoft\Windows\CurrentVersion\Run', True);
       Reg.WriteString(FFile.Name, FFile.FullName);
-      LabelSuccess.Caption := 'Приложение успешно добавлено в автозагрузку';
-      PanelSplash(PanelSuccess);
+      if not FSilentMode then
+      begin
+        LabelSuccess.Caption := 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ';
+        PanelSplash(PanelSuccess);
+      end;
     except
       on E: Exception do
       begin
-        if E is ERegistryException then
+        if not FSilentMode then
         begin
-          ShowInfo('Приложение не было добавлено в автозапуск, т.к. у пользователя нет прав. Запустите приложение от имени администратора');
-        end
-        else
-        begin
-          ShowInfo('Произошла неизвестная ошибка и приложение не было добавлено в автозапуск. Попробуйте запустить приложение от имени администратора');
+          if E is ERegistryException then
+            ShowInfo('пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅ.пїЅ. пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ')
+          else
+            ShowInfo('пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ');
         end;
       end;
     end;
@@ -413,13 +423,13 @@ procedure TFormMain.ButtonFlatAddClick(Sender: TObject);
 begin
   case ExistCurrentApp of
     -1:
-      ShowInfo('Нет доступа к реестру');
+      ShowInfo('пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ');
     0:
       AddCurrentToAutoRun;
     1:
-      ShowInfo('Приложение уже добавлено в автозагрузку с текущим пользователем');
+      ShowInfo('пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ');
     2:
-      ShowInfo('Приложение уже добавлено в автозагрузку с любым пользователем');
+      ShowInfo('пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ');
   end;
 end;
 
@@ -503,7 +513,7 @@ var
 begin
   if FileName = '' then
   begin
-    ShowInfo('Выбранный вами файл не является исполнительным и не может быть добавлен в Автозагрузку. ' + #13#10 + 'Возможно, это ссылка-протокол, которая используется сторонними программами.', Clear);
+    ShowInfo('пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ. ' + #13#10 + 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.', Clear);
     Exit;
   end;
   FFile := CreateInputFile(FileName);
@@ -569,7 +579,7 @@ begin
   Id := TableExAutoruns.ItemIndex;
   if not FAutoruns.IndexIn(Id) then
     Exit;
-  if MessageBox(Handle, 'Вы действительно хотите удалить выбранный элемент из автозагрузки?', 'Внимание', MB_ICONWARNING or MB_YESNO) <> ID_YES then
+  if MessageBox(Handle, 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ?', 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ', MB_ICONWARNING or MB_YESNO) <> ID_YES then
     Exit;
   Reg := TRegistry.Create(KEY_ALL_ACCESS);
   try
@@ -585,14 +595,14 @@ end;
 procedure TFormMain.TimerAnimateTimer(Sender: TObject);
 begin
   if FAnimateDir then
-  begin //вниз
+  begin //пїЅпїЅпїЅпїЅ
     ImageDrop.Top := ImageDrop.Top + 7;
     if ImageDrop.BoundsRect.Bottom >= LabelExDrag.BoundsRect.Bottom then
     begin
       FAnimateDir := False;
     end;
   end
-  else //вверх
+  else //пїЅпїЅпїЅпїЅпїЅ
   begin
     ImageDrop.Top := ImageDrop.Top - 4;
     if ImageDrop.BoundsRect.Top <= LabelExDrag.BoundsRect.Top then
